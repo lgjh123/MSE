@@ -166,17 +166,12 @@ InverseList&& IndexCon::recall(const string& query)    //query用户请求的语
 
             // 移动除了第一篇以外每一篇文档的游标
          for(int i=1; i!=cursors.size(); ++i){
-            /*while(cursors[i] && cursors[i]->docID < doc_id)
-               cursors[i] = cursors[i]->next;
 
-            // 其中一个词找完了全部的文档
-            if(!cursors[i]) {
-               return res;
-            }*/
-            if(cursors[i].find(doc_id) != cursors[i].end());
+            if(cursors[i].find(doc_id) == false){
+                              }
+               //return std::move(InverseList(0));   //返回一个空集
                
             // 更新 next_doc_id
-            if(cursors[i]->docID > doc_id && cursors[i]->docID > next_doc_id) {
                next_doc_id = cursors[i]->docID;
             }
          }
