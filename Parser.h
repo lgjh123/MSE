@@ -29,7 +29,6 @@ public:
 protected:   //类外普通函数不能访问，任何权限继承的子类都可以直接访问
     ifstream ifs;
     string filepath;
-    FILE fp;
 };
 class DocParser : public BaseParser{
 public:

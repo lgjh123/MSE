@@ -11,7 +11,6 @@ using std::map;
 #include<memory>
 using std::make_shared;
 using std::shared_ptr;
-#include <list>
 
 //分词器
 #include "Tokenizer.h"
@@ -21,32 +20,30 @@ using std::shared_ptr;
 #include "Database.h"
 
 using std::size_t;
+//自定义数据结构(struct)，倒排列表用链表组织：有一个HEAD的单链表
 //应为目前文档都是顺序读取，不需要排序
 struct InverseItem //倒排项
 {
 //文档ID 文档中的词频 在文档中的位置
-    InverseItem(): docID(),tf(0),_pos() {}
+    InverseItem(): docID(),tf(0),_pos(),next(nullptr) {}
     InverseItem(const uint32_t& id,const vector<uint32_t>& positions)
         :docID(id),
         tf(positions.size()),
-        _pos(positions)
-        {}
+        _pos(positions),
+        next(nullptr)   {}
     InverseItem(const uint32_t& id)
         :docID(id),
-        tf(1),_pos() {}     //词频最少为1,在构造的时候说明已经有一个
+        tf(0),_pos(),next(nullptr) {}
     InverseItem(const InverseItem &old)
         :docID(old.docID),
         tf(old.tf),
-        _pos(old._pos)
-         {}
+        _pos(old._pos),
+        next(nullptr) {}
     ~InverseItem()
     {
         //链表资源交给header来回收
     }
-
-    uint32_t getDocId(){
-        return docID;
-    }
+    InverseItem *next;
 //private:
     const uint32_t docID;
     size_t tf;    //在该文档中的词频
@@ -54,60 +51,56 @@ struct InverseItem //倒排项
 
 };
 
-struct InverseList //倒排列表
+struct InverseItemHeader : InverseItem
 {
-    InverseList(uint32_t i)
-    : df(0),total_tf(0)
+    InverseItemHeader() : InverseItem(),df(0),total_tf(0) {}
+    InverseItemHeader(const InverseItemHeader &old) : InverseItem(),df(old.df),total_tf(old.total_tf)
     {
-       _list.push_back(InverseItem(i));
+        InverseItem *p2 = old.next;
+        if(p2)
+        {
+            //复制第一个InverseItem节点
+            this-> next = new InverseItem(*p2);
+            
+            InverseItem *p1 = this->next;
+            while(p2->next)
+            {
+                p1->next = new InverseItem(*(p2->next));
+                p2 = p2->next;
+                p1 = p1->next;
+            }
+        }
     }
-    void adddf(int i){
-        df = i;
-    }
-    void addtotaltf(){
-        ++total_tf;
-    }
-    uint32_t getBackDocId()
+    ~InverseItemHeader()
     {
-        auto Item = std::move(_list.back());
-        return Item.getDocId();
+        InverseItem *p;
+
+        while(next)
+        {
+            p = next->next;
+            delete next;
+            next = p;
+        }
+        next = nullptr;
     }
-    void addItem(uint32_t docId){
-        _list.push_back(InverseItem(docId));
-        ++df;
-    }
-    void addOffset(uint32_t offset){    //因为假定是顺序读取的，所以直接吧offset加到最后的倒排项中
-        auto it = _list.end();
-        it->_pos.push_back(offset);
-        ++it->tf;
-    }
-    uint32_t getDf(){
-        return df;
-    }
-    size_t getListSize(){
-        return _list.size();
-    }
-private:
     uint32_t df;          //出现的文档数目
     uint32_t total_tf;    //所有文档中的词频
-    list<InverseItem> _list;
 
-    //InverseListHeader& mergIntersection(const InverseListHeader&);
+    //InverseItemHeader& mergIntersection(const InverseItemHeader&);
 };
 class IndexCon
 {
 public:
-    using InverseIndex = map<uint32_t,InverseList>;
+    using InverseIndex = map<uint32_t,InverseItemHeader *>;
     //倒排索引 = 词元编号 + 倒排列表
     IndexCon() : iindex() { std::cout << "[ CONSTRUCT ] IndexConstructor" <<std::endl; }
     bool addDoc(BaseParser&);
-    InverseList&& recall(const string&);
-    //FIXME:
+    shared_ptr<InverseItemHeader> recall(const string&);
     ~IndexCon() {}
 
     static MysqlConn db;   //数据库
 private:
-    bool addWord2InverseList(const string& word,
+    bool addWord2InverseItem(const string& word,
                                    const string& document,
                                    uint32_t offset);
     static JiebaTokenizer tokenizer;   //分词器
@@ -116,5 +109,5 @@ private:
 
 };
 //FIXME:为什么要写在外面?
-vector<uint32_t> search_phrase(const vector<const InverseList*> &,
+vector<uint32_t> search_phrase(const vector<const InverseItem*> &,
                                const vector<uint32_t> &);
